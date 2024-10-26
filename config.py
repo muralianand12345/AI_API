@@ -1,3 +1,4 @@
+import os
 import logging
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
@@ -10,7 +11,7 @@ class Config:
     class API:
         host = "0.0.0.0"
         port = 8002
-        app_name = "src.main:app"
+        app_name = int(os.getenv("PORT", "8000"))
         allow_credentials = True
         allow_origins = ["*"]
         allow_headers = ["*"]
@@ -27,6 +28,7 @@ class Config:
         embedding = NVIDIAEmbeddings(
             model="nvidia/nv-embedqa-mistral-7b-v2",
             truncate="START",
+            api_key=os.getenv("NVIDIA_API_KEY")
         )
         
     class Prompt:
@@ -80,4 +82,4 @@ class Config:
         """
         
     class Data:
-        folder = "./data"
+        folder = os.getenv("DATA_DIR", "./data")

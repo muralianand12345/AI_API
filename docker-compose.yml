@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ai-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    restart: unless-stopped

@@ -1,0 +1,13 @@
+fastapi
+langchain
+langchain-groq
+python-dotenv
+langchain-nvidia-ai-endpoints
+uvicorn
+langchain-community
+passlib
+jwt
+bcrypt
+python-jose
+pypdf
+faiss-cpu
