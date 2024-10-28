@@ -1,7 +1,10 @@
+import os
+import logging
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .routers import ai, auth
+from .utils.logger import logger
 from .utils.error_handler import AIApiException
 from config import Config
 
@@ -19,9 +22,10 @@ app.add_middleware(
     allow_headers=Config.API.allow_headers,
 )
 
-
 @app.exception_handler(AIApiException)
 async def api_exception_handler(request: Request, exc: AIApiException):
+    if logger:
+        logger.error(f"API Exception: {exc.status_code} - {exc.detail}")
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 

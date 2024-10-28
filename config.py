@@ -10,12 +10,13 @@ load_dotenv()
 class Config:
     class API:
         host = "0.0.0.0"
-        port = 8002
-        app_name = int(os.getenv("PORT", "8000"))
+        port = int(os.getenv("PORT", "8000"))
+        module_path = 'src.main:app'
+        reload = False
         allow_credentials = True
         allow_origins = ["*"]
         allow_headers = ["*"]
-        allow_methods = ["DELETE", "GET", "POST", "PUT"]
+        allow_methods = ["GET", "POST"]
             
     class Logging:
         enabled = True

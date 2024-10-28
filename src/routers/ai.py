@@ -5,6 +5,7 @@ from ..utils.models import ChatMessage, ChatResponse
 from ..utils.auth import get_current_user
 from ..utils.database import DBUser
 from ..utils.files_manager import pdf_manager
+from ..utils.logger import logger
 from config import Config
 
 router = APIRouter()
@@ -15,9 +16,13 @@ async def upload_pdf(
     file: UploadFile = File(...), current_user: DBUser = Depends(get_current_user)
 ):
     if not file.filename.endswith(".pdf"):
+        if logger:
+            logger.error(f"Invalid file type: {file.filename}")
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     try:
+        if logger:
+            logger.info(f"Processing PDF: {file.filename}")
         file_path = await pdf_manager.save_pdf(file, current_user.username)
         chunks = pdf_manager.process_pdf(file_path, current_user.username)
 
@@ -27,6 +32,8 @@ async def upload_pdf(
             "chunks_processed": len(chunks),
         }
     except Exception as e:
+        if logger:
+            logger.error(f"Error processing PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
 
@@ -43,6 +50,8 @@ async def get_document_stats(current_user: DBUser = Depends(get_current_user)):
 )
 async def chat(message: ChatMessage, current_user: DBUser = Depends(get_current_user)):
     try:
+        if logger:
+            logger.info(f"Chatting with AI: {message.message}")
         relevant_docs = pdf_manager.search_documents(current_user.username, message.message)
 
         context = "\n\n".join(relevant_docs) if relevant_docs else ""
@@ -65,6 +74,9 @@ async def chat(message: ChatMessage, current_user: DBUser = Depends(get_current_
         response_content = (
             ai_response.content if hasattr(ai_response, "content") else str(ai_response)
         )
+        
+        if logger:
+            logger.info(f"AI response: {response_content}")
 
         return ChatResponse(
             username=current_user.username,
@@ -72,4 +84,6 @@ async def chat(message: ChatMessage, current_user: DBUser = Depends(get_current_
             response=response_content,
         )
     except Exception as e:
+        if logger:
+            logger.error(f"Error chatting with AI: {str(e)}")
         raise AIApiException(detail="Error occurred while chatting with AI, try again.", error=str(e))

@@ -7,6 +7,7 @@ from langchain_community.vectorstores import FAISS
 from fastapi import UploadFile
 from .database import DBUser
 from config import Config
+from .logger import logger
 
 class PDFManager:
     def __init__(self):
@@ -17,6 +18,8 @@ class PDFManager:
     def get_user_folder(self, username: str) -> str:
         user_folder = os.path.join(self.base_path, username)
         os.makedirs(user_folder, exist_ok=True)
+        if logger:
+            logger.info(f"User folder created: {user_folder}")
         return user_folder
     
     async def save_pdf(self, file: UploadFile, username: str) -> str:
@@ -27,6 +30,9 @@ class PDFManager:
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
+            
+        if logger:
+            logger.info(f"PDF saved: {file_path}")
         
         return file_path
     
@@ -47,19 +53,33 @@ class PDFManager:
             )
         else:
             self.user_embeddings[username].add_documents(splits)
+            
+        if logger:
+            logger.info(f"PDF processed: {file_path}")
         
         return [doc.page_content for doc in splits]
     
     def search_documents(self, username: str, query: str, k: int = 3) -> List[str]:
         if username not in self.user_embeddings:
+            if logger:
+                logger.warning(f"No embeddings found for user: {username}")
             return []
             
         docs = self.user_embeddings[username].similarity_search(query, k=k)
+        
+        if logger:
+            logger.info(f"Search results for {username}: {docs}")
+        
         return [doc.page_content for doc in docs]
     
     def get_user_stats(self, username: str) -> Dict:
         if username not in self.user_embeddings:
+            if logger:
+                logger.info(f"No embeddings found for user: {username}")
             return {"total_documents": 0, "has_embeddings": False}
+        
+        if logger:
+            logger.info(f"User stats for {username}: {len(self.user_embeddings[username].docstore._dict)}")
             
         return {
             "total_documents": len(self.user_embeddings[username].docstore._dict),
