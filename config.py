@@ -23,6 +23,9 @@ class Config:
         log_folder = "logs"
         log_file = "app.log"
         log_level = logging.INFO
+        
+    class Memory:
+        buffer_size = 10
 
     class Model:
         llm = ChatGroq(model="llama-3.2-90b-text-preview", temperature=0.3)

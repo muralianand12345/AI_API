@@ -1,5 +1,9 @@
+from typing import Dict
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from langchain_core.prompts import ChatPromptTemplate
+from langchain.memory import ConversationBufferMemory
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage
 from ..utils.error_handler import AIApiException
 from ..utils.models import ChatMessage, ChatResponse
 from ..utils.auth import get_current_user
@@ -10,6 +14,18 @@ from config import Config
 
 router = APIRouter()
 
+user_memories: Dict[str, ConversationBufferMemory] = {}
+
+def get_or_create_memory(username: str) -> ConversationBufferMemory:
+    """Get or create a memory instance for a user."""
+    if username not in user_memories:
+        user_memories[username] = ConversationBufferMemory(
+            return_messages=True,
+            memory_key="chat_history",
+            input_key="input",
+            output_key="output"
+        )
+    return user_memories[username]
 
 @router.post("/upload-pdf")
 async def upload_pdf(
@@ -52,29 +68,40 @@ async def chat(message: ChatMessage, current_user: DBUser = Depends(get_current_
     try:
         if logger:
             logger.info(f"Chatting with AI: {message.message}")
-        relevant_docs = pdf_manager.search_documents(current_user.username, message.message)
+            
+        memory = get_or_create_memory(current_user.username)
+        
+        relevant_docs = pdf_manager.search_documents(
+            current_user.username, message.message
+        )
 
         context = "\n\n".join(relevant_docs) if relevant_docs else ""
-
+        
+        messages = [("system", Config.Prompt.default)]
         if context:
-            prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", Config.Prompt.default),
-                    ("system", f"Context from user documents:\n{context}"),
-                    ("user", "{input}"),
-                ]
-            )
-        else:
-            prompt = ChatPromptTemplate.from_messages(
-                [("system", Config.Prompt.default), ("user", "{input}")]
-            )
+            messages.append(("system", f"Context from user documents:\n{context}"))
 
-        chain = prompt | Config.Model.llm
+        chat_history = memory.load_memory_variables({}).get("chat_history", [])
+        if chat_history:
+            messages.extend([
+                ("human" if isinstance(msg, HumanMessage) else "assistant", msg.content)
+                for msg in chat_history[-Config.Memory.buffer_size:]
+            ])
+            
+        messages.append(("user", "{input}"))
+        prompt = ChatPromptTemplate.from_messages(messages)
+
+        chain = prompt | Config.Model.llm | StrOutputParser()
         ai_response = chain.invoke({"input": message.message})
         response_content = (
             ai_response.content if hasattr(ai_response, "content") else str(ai_response)
         )
         
+        memory.save_context(
+            {"input": message.message},
+            {"output": response_content}
+        )
+
         if logger:
             logger.info(f"AI response: {response_content}")
 
@@ -86,4 +113,18 @@ async def chat(message: ChatMessage, current_user: DBUser = Depends(get_current_
     except Exception as e:
         if logger:
             logger.error(f"Error chatting with AI: {str(e)}")
-        raise AIApiException(detail="Error occurred while chatting with AI, try again.", error=str(e))
+        raise AIApiException(
+            detail="Error occurred while chatting with AI, try again.", error=str(e)
+        )
+
+@router.delete("/chat/history")
+async def clear_chat_history(current_user: DBUser = Depends(get_current_user)):
+    """Clear the chat history for a user."""
+    try:
+        if current_user.username in user_memories:
+            del user_memories[current_user.username]
+        return {"message": "Chat history cleared successfully"}
+    except Exception as e:
+        if logger:
+            logger.error(f"Error clearing chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error clearing chat history")
